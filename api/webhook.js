@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 
-// In-memory storage
+// In-memory storage (data sementara, akan hilang saat redeploy)
 let store = {
     profileImage: null,
     profileName: 'Xrans Official',
@@ -11,12 +11,30 @@ let store = {
 };
 
 export default async function handler(req, res) {
+    // Handle GET request untuk cek kesehatan endpoint
+    if (req.method === 'GET') {
+        return res.status(200).json({
+            status: 'active',
+            message: 'Webhook endpoint is running. Use POST method for Telegram updates.',
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    // Hanya terima POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // Ambil environment variables
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const adminId = process.env.TELEGRAM_CHAT_ID;
+
+    // Validasi environment variables
+    if (!botToken || !adminId) {
+        console.error('Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
+        return res.status(500).json({ error: 'Server configuration error' });
+    }
+
     const body = req.body;
 
     if (!body || !body.message) {
@@ -28,9 +46,12 @@ export default async function handler(req, res) {
     const text = body.message.text;
     const isAdmin = chatId.toString() === adminId;
 
-    // Admin commands
+    // ============================================
+    // ADMIN COMMANDS - FULL FITUR
+    // ============================================
     if (isAdmin) {
-        // /start command
+        
+        // /start - Menu Utama
         if (text === '/start') {
             const helpMessage = `
 *XRANS OFFICIAL BOT* 🤖
@@ -310,7 +331,9 @@ Gunakan \`/delproduct ${product.id}\` untuk menghapus.
         }
     }
 
-    // Handle admin send photo with caption (reply to customer)
+    // ============================================
+    // HANDLE ADMIN SEND PHOTO + CAPTION
+    // ============================================
     if (isAdmin && body.message.photo) {
         const caption = body.message.caption || '';
         const match = caption.match(/^(reply_[a-zA-Z0-9_]+)/);
@@ -343,8 +366,19 @@ Gunakan \`/delproduct ${product.id}\` untuk menghapus.
         }
     }
 
-    // Default response for unknown commands
-    if (isAdmin) {
+    // ============================================
+    // CUSTOMER COMMANDS
+    // ============================================
+    if (!isAdmin && text === '/start') {
+        await bot.telegram.sendMessage(chatId, 
+            `🛍️ *Selamat datang di Xrans Official!*\n\nTerima kasih telah menghubungi kami.\n\n🔗 Kunjungi website kami untuk melihat produk dan portofolio:\nhttps://xrans-official.vercel.app\n\n📦 Untuk order, silakan langsung melalui website.`,
+            { parse_mode: 'Markdown' }
+        );
+        return res.status(200).json({ ok: true });
+    }
+
+    // Default response untuk perintah tidak dikenal (hanya untuk admin)
+    if (isAdmin && text && !text.startsWith('/')) {
         await bot.telegram.sendMessage(chatId, 
             `❌ *Perintah tidak dikenal*\n\nKetik \`/start\` untuk melihat daftar perintah yang tersedia.`,
             { parse_mode: 'Markdown' }
