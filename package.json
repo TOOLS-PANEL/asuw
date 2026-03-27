@@ -1,0 +1,21 @@
+{
+    "name": "xrans-website",
+    "version": "1.0.0",
+    "description": "Xrans Official Website with Telegram Bot",
+    "main": "index.html",
+    "scripts": {
+        "dev": "vercel dev",
+        "deploy": "vercel deploy --prod"
+    },
+    "dependencies": {
+        "axios": "^1.6.7",
+        "telegraf": "^4.15.3",
+        "node-fetch": "^3.3.2"
+    },
+    "devDependencies": {
+        "@vercel/node": "^3.0.0"
+    },
+    "keywords": ["telegram-bot", "vercel", "website", "ecommerce"],
+    "author": "Xrans Official",
+    "license": "MIT"
+}
