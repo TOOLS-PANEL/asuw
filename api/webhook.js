@@ -1,6 +1,6 @@
-import { Telegraf } from 'telegraf';
+// api/webhook.js - VERSION TANPA MARKDOWN (AMAN)
 
-// In-memory storage (data sementara, akan hilang saat redeploy)
+// In-memory storage
 let store = {
     profileImage: null,
     profileName: 'Xrans Official',
@@ -11,379 +11,318 @@ let store = {
 };
 
 export default async function handler(req, res) {
-    // Handle GET request untuk cek kesehatan endpoint
+    // Handle GET request
     if (req.method === 'GET') {
         return res.status(200).json({
             status: 'active',
-            message: 'Webhook endpoint is running. Use POST method for Telegram updates.',
+            message: 'Webhook is running',
             timestamp: new Date().toISOString()
         });
     }
 
-    // Hanya terima POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Ambil environment variables
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const adminId = process.env.TELEGRAM_CHAT_ID;
 
-    // Validasi environment variables
     if (!botToken || !adminId) {
-        console.error('Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
-        return res.status(500).json({ error: 'Server configuration error' });
+        console.error('Missing environment variables');
+        return res.status(500).json({ error: 'Configuration error' });
     }
 
-    const body = req.body;
-
-    if (!body || !body.message) {
-        return res.status(200).json({ ok: true });
-    }
-
-    const bot = new Telegraf(botToken);
-    const chatId = body.message.chat.id;
-    const text = body.message.text;
-    const isAdmin = chatId.toString() === adminId;
-
-    // ============================================
-    // ADMIN COMMANDS - FULL FITUR
-    // ============================================
-    if (isAdmin) {
+    try {
+        const body = req.body;
         
-        // /start - Menu Utama
-        if (text === '/start') {
-            const helpMessage = `
-*XRANS OFFICIAL BOT* 🤖
-
-Selamat datang Admin! Berikut perintah yang tersedia:
-
-━━━━━━━━━━━━━━━━━━━━
-*📸 PROFILE SETTINGS*
-━━━━━━━━━━━━━━━━━━━━
-\`/setprofile [url]\` - Ganti foto profil
-\`/setname [nama]\` - Ganti nama
-\`/settitle [title]\` - Ganti jabatan
-
-━━━━━━━━━━━━━━━━━━━━
-*📦 PRODUCT MANAGEMENT*
-━━━━━━━━━━━━━━━━━━━━
-\`/addproduct [nama]|[harga]|[deskripsi]|[url_gambar]\` - Tambah produk
-\`/delproduct [id]\` - Hapus produk
-\`/listproduct\` - Lihat semua produk
-
-━━━━━━━━━━━━━━━━━━━━
-*🖼️ PORTFOLIO MANAGEMENT*
-━━━━━━━━━━━━━━━━━━━━
-\`/addportfolio [judul]|[deskripsi]|[url_gambar]\` - Tambah portofolio
-\`/delportfolio [id]\` - Hapus portofolio
-\`/listportfolio\` - Lihat semua portofolio
-
-━━━━━━━━━━━━━━━━━━━━
-*💬 RESPONSE TO CUSTOMER*
-━━━━━━━━━━━━━━━━━━━━
-Balas dengan format:
-
-• *Teks:* 
-\`reply_[deviceId] [pesan]\`
-
-• *Foto + Teks:* 
-Kirim foto dengan caption:
-\`reply_[deviceId] [pesan]\`
-
-━━━━━━━━━━━━━━━━━━━━
-*CONTOH PENGGUNAAN*
-━━━━━━━━━━━━━━━━━━━━
-\`/addproduct Kaos Premium|150000|Kaos katun berkualitas|https://example.com/kaos.jpg\`
-
-\`reply_device123 Halo, pesanan Anda sedang diproses!\`
-`;
-
-            await bot.telegram.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+        if (!body || !body.message) {
             return res.status(200).json({ ok: true });
         }
 
-        // Set profile image
-        if (text.startsWith('/setprofile')) {
-            const url = text.replace('/setprofile', '').trim();
-            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-                store.profileImage = url;
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *Foto profil berhasil diupdate!*\n\n> ${url}`,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Format salah!*\n\nGunakan:\n\`/setprofile https://example.com/foto.jpg\``,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-            return res.status(200).json({ ok: true });
-        }
+        const chatId = body.message.chat.id;
+        const text = body.message.text;
+        const isAdmin = chatId.toString() === adminId;
 
-        // Set profile name
-        if (text.startsWith('/setname')) {
-            const name = text.replace('/setname', '').trim();
-            if (name) {
-                store.profileName = name;
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *Nama berhasil diubah menjadi:*\n\n> ${name}`,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Format salah!*\n\nGunakan:\n\`/setname Xrans Official\``,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-            return res.status(200).json({ ok: true });
-        }
+        console.log(`Message from ${chatId}: ${text}`);
 
-        // Set profile title
-        if (text.startsWith('/settitle')) {
-            const title = text.replace('/settitle', '').trim();
-            if (title) {
-                store.profileTitle = title;
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *Jabatan berhasil diubah menjadi:*\n\n> ${title}`,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Format salah!*\n\nGunakan:\n\`/settitle Digital Creator\``,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-            return res.status(200).json({ ok: true });
-        }
-
-        // Add product
-        if (text.startsWith('/addproduct')) {
-            const content = text.replace('/addproduct', '').trim();
-            const parts = content.split('|');
+        // ============================================
+        // ADMIN COMMANDS
+        // ============================================
+        if (isAdmin) {
             
-            if (parts.length >= 2) {
-                const product = {
-                    id: Date.now().toString(),
-                    name: parts[0].trim(),
-                    price: parseInt(parts[1].trim()),
-                    description: parts[2] ? parts[2].trim() : '',
-                    image: parts[3] ? parts[3].trim() : null,
-                    createdAt: new Date().toISOString()
-                };
-                
-                store.products.push(product);
-                
-                const successMessage = `
-✅ *PRODUK BERHASIL DITAMBAHKAN!*
+            // /start - Menu Utama
+            if (text === '/start') {
+                await sendMessage(botToken, chatId, `
+╔══════════════════════════════════╗
+║     XRANS OFFICIAL BOT           ║
+╚══════════════════════════════════╝
 
-━━━━━━━━━━━━━━━━━━━━
-📦 *Nama:* ${product.name}
-💰 *Harga:* Rp ${product.price.toLocaleString()}
-📝 *Deskripsi:* ${product.description || '-'}
-🆔 *ID:* \`${product.id}\`
-━━━━━━━━━━━━━━━━━━━━
+📸 PROFILE SETTINGS
+/setprofile [url] - Ganti foto profil
+/setname [nama] - Ganti nama
+/settitle [title] - Ganti jabatan
 
-Gunakan \`/delproduct ${product.id}\` untuk menghapus.
-                `;
-                
-                await bot.telegram.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Format salah!*\n\nGunakan format:\n\`/addproduct Nama|Harga|Deskripsi|url_gambar\`\n\n*Contoh:*\n\`/addproduct Kaos Premium|150000|Kaos katun berkualitas|https://example.com/kaos.jpg\``,
-                    { parse_mode: 'Markdown' }
-                );
+📦 PRODUCT MANAGEMENT
+/addproduct Nama|Harga|Deskripsi|url - Tambah produk
+/delproduct [id] - Hapus produk
+/listproduct - Lihat semua produk
+
+🖼️ PORTFOLIO MANAGEMENT
+/addportfolio Judul|Deskripsi|url - Tambah portofolio
+/delportfolio [id] - Hapus portofolio
+/listportfolio - Lihat semua portofolio
+
+💬 RESPONSE TO CUSTOMER
+reply_[deviceId] [pesan] - Balas teks
+Kirim foto dengan caption reply_[deviceId] - Balas foto
+
+Contoh:
+/addproduct Kaos Premium|150000|Kaos katun|https://example.com/kaos.jpg
+reply_device123 Halo, pesanan sedang diproses
+`);
+                return res.status(200).json({ ok: true });
             }
-            return res.status(200).json({ ok: true });
+
+            // Set profile image
+            if (text.startsWith('/setprofile')) {
+                const url = text.replace('/setprofile', '').trim();
+                if (url && url.startsWith('http')) {
+                    store.profileImage = url;
+                    await sendMessage(botToken, chatId, `✅ Foto profil berhasil diupdate!\n\nURL: ${url}`);
+                } else {
+                    await sendMessage(botToken, chatId, `❌ Format salah!\nGunakan: /setprofile https://example.com/foto.jpg`);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Set profile name
+            if (text.startsWith('/setname')) {
+                const name = text.replace('/setname', '').trim();
+                if (name) {
+                    store.profileName = name;
+                    await sendMessage(botToken, chatId, `✅ Nama berhasil diubah menjadi: ${name}`);
+                } else {
+                    await sendMessage(botToken, chatId, `❌ Format salah!\nGunakan: /setname Xrans Official`);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Set profile title
+            if (text.startsWith('/settitle')) {
+                const title = text.replace('/settitle', '').trim();
+                if (title) {
+                    store.profileTitle = title;
+                    await sendMessage(botToken, chatId, `✅ Jabatan berhasil diubah menjadi: ${title}`);
+                } else {
+                    await sendMessage(botToken, chatId, `❌ Format salah!\nGunakan: /settitle Digital Creator`);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Add product
+            if (text.startsWith('/addproduct')) {
+                const content = text.replace('/addproduct', '').trim();
+                const parts = content.split('|');
+                
+                if (parts.length >= 2) {
+                    const product = {
+                        id: Date.now().toString(),
+                        name: parts[0].trim(),
+                        price: parseInt(parts[1].trim()),
+                        description: parts[2] ? parts[2].trim() : '',
+                        image: parts[3] ? parts[3].trim() : null
+                    };
+                    
+                    store.products.push(product);
+                    await sendMessage(botToken, chatId, 
+                        `✅ PRODUK BERHASIL DITAMBAHKAN!\n\n📦 Nama: ${product.name}\n💰 Harga: Rp ${product.price.toLocaleString()}\n🆔 ID: ${product.id}\n📝 Deskripsi: ${product.description || '-'}`
+                    );
+                } else {
+                    await sendMessage(botToken, chatId, 
+                        `❌ Format salah!\n\nGunakan:\n/addproduct Nama|Harga|Deskripsi|url\n\nContoh:\n/addproduct Kaos Premium|150000|Kaos katun berkualitas|https://example.com/kaos.jpg`
+                    );
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Delete product
+            if (text.startsWith('/delproduct')) {
+                const id = text.replace('/delproduct', '').trim();
+                const index = store.products.findIndex(p => p.id === id);
+                
+                if (index !== -1) {
+                    const deleted = store.products.splice(index, 1)[0];
+                    await sendMessage(botToken, chatId, `✅ Produk berhasil dihapus!\n\n📦 ${deleted.name}\n💰 Rp ${deleted.price.toLocaleString()}`);
+                } else {
+                    await sendMessage(botToken, chatId, `❌ Produk dengan ID ${id} tidak ditemukan.\n\nGunakan /listproduct untuk melihat daftar produk.`);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // List products
+            if (text === '/listproduct') {
+                if (store.products.length === 0) {
+                    await sendMessage(botToken, chatId, `📦 Belum ada produk.\n\nTambahkan produk dengan:\n/addproduct Nama|Harga|Deskripsi|url`);
+                } else {
+                    let list = '📦 DAFTAR PRODUK\n━━━━━━━━━━━━━━━━━━━━\n\n';
+                    store.products.forEach((p, i) => {
+                        list += `${i+1}. ${p.name}\n`;
+                        list += `   ID: ${p.id}\n`;
+                        list += `   Harga: Rp ${p.price.toLocaleString()}\n`;
+                        list += `   Deskripsi: ${p.description.substring(0, 50)}${p.description.length > 50 ? '...' : ''}\n\n`;
+                    });
+                    list += `Gunakan /delproduct [id] untuk menghapus produk.`;
+                    await sendMessage(botToken, chatId, list);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Add portfolio
+            if (text.startsWith('/addportfolio')) {
+                const content = text.replace('/addportfolio', '').trim();
+                const parts = content.split('|');
+                
+                if (parts.length >= 2) {
+                    const portfolio = {
+                        id: Date.now().toString(),
+                        title: parts[0].trim(),
+                        description: parts[1] ? parts[1].trim() : '',
+                        image: parts[2] ? parts[2].trim() : null
+                    };
+                    
+                    store.portfolios.push(portfolio);
+                    await sendMessage(botToken, chatId, `✅ PORTOFOLIO BERHASIL DITAMBAHKAN!\n\n🖼️ Judul: ${portfolio.title}\n📝 Deskripsi: ${portfolio.description}\n🆔 ID: ${portfolio.id}`);
+                } else {
+                    await sendMessage(botToken, chatId, 
+                        `❌ Format salah!\n\nGunakan:\n/addportfolio Judul|Deskripsi|url\n\nContoh:\n/addportfolio Website E-commerce|Website modern untuk toko online|https://example.com/project.jpg`
+                    );
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Delete portfolio
+            if (text.startsWith('/delportfolio')) {
+                const id = text.replace('/delportfolio', '').trim();
+                const index = store.portfolios.findIndex(p => p.id === id);
+                
+                if (index !== -1) {
+                    const deleted = store.portfolios.splice(index, 1)[0];
+                    await sendMessage(botToken, chatId, `✅ Portofolio berhasil dihapus!\n\n🖼️ ${deleted.title}`);
+                } else {
+                    await sendMessage(botToken, chatId, `❌ Portofolio dengan ID ${id} tidak ditemukan.\n\nGunakan /listportfolio untuk melihat daftar.`);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // List portfolios
+            if (text === '/listportfolio') {
+                if (store.portfolios.length === 0) {
+                    await sendMessage(botToken, chatId, `🖼️ Belum ada portofolio.\n\nTambahkan portofolio dengan:\n/addportfolio Judul|Deskripsi|url`);
+                } else {
+                    let list = '🖼️ DAFTAR PORTOFOLIO\n━━━━━━━━━━━━━━━━━━━━\n\n';
+                    store.portfolios.forEach((p, i) => {
+                        list += `${i+1}. ${p.title}\n`;
+                        list += `   ID: ${p.id}\n`;
+                        list += `   Deskripsi: ${p.description.substring(0, 50)}${p.description.length > 50 ? '...' : ''}\n\n`;
+                    });
+                    list += `Gunakan /delportfolio [id] untuk menghapus portofolio.`;
+                    await sendMessage(botToken, chatId, list);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            // Handle reply to customer (text)
+            if (text && text.match(/^reply_/)) {
+                const match = text.match(/^(reply_[a-zA-Z0-9_]+)\s+(.+)/s);
+                if (match) {
+                    const deviceId = match[1];
+                    const replyMessage = match[2];
+                    
+                    store.customerResponses[deviceId] = {
+                        text: replyMessage,
+                        image: null,
+                        timestamp: Date.now()
+                    };
+                    
+                    await sendMessage(botToken, chatId, 
+                        `✅ Pesan terkirim ke customer!\n\nDevice ID: ${deviceId}\nPesan: ${replyMessage.substring(0, 200)}`
+                    );
+                }
+                return res.status(200).json({ ok: true });
+            }
         }
 
-        // Delete product
-        if (text.startsWith('/delproduct')) {
-            const id = text.replace('/delproduct', '').trim();
-            const index = store.products.findIndex(p => p.id === id);
+        // ============================================
+        // HANDLE ADMIN SEND PHOTO
+        // ============================================
+        if (isAdmin && body.message.photo) {
+            const caption = body.message.caption || '';
+            const match = caption.match(/^(reply_[a-zA-Z0-9_]+)/);
             
-            if (index !== -1) {
-                const deleted = store.products.splice(index, 1)[0];
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *Produk berhasil dihapus!*\n\n📦 ${deleted.name}\n💰 Rp ${deleted.price.toLocaleString()}\n🆔 \`${deleted.id}\``,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Produk tidak ditemukan!*\n\n🆔 \`${id}\`\n\nGunakan \`/listproduct\` untuk melihat daftar produk.`,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-            return res.status(200).json({ ok: true });
-        }
-
-        // List products
-        if (text === '/listproduct') {
-            if (store.products.length === 0) {
-                await bot.telegram.sendMessage(chatId, 
-                    `📦 *Belum ada produk*\n\nTambahkan produk dengan perintah:\n\`/addproduct Nama|Harga|Deskripsi|url_gambar\``,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                let productList = '*📦 DAFTAR PRODUK*\n\n';
-                store.products.forEach((p, i) => {
-                    productList += `${i+1}. *${p.name}*\n`;
-                    productList += `   🆔 \`${p.id}\`\n`;
-                    productList += `   💰 Rp ${p.price.toLocaleString()}\n`;
-                    productList += `   📝 ${p.description.substring(0, 50)}${p.description.length > 50 ? '...' : ''}\n\n`;
-                });
-                productList += `Gunakan \`/delproduct [id]\` untuk menghapus produk.`;
-                
-                await bot.telegram.sendMessage(chatId, productList, { parse_mode: 'Markdown' });
-            }
-            return res.status(200).json({ ok: true });
-        }
-
-        // Add portfolio
-        if (text.startsWith('/addportfolio')) {
-            const content = text.replace('/addportfolio', '').trim();
-            const parts = content.split('|');
-            
-            if (parts.length >= 2) {
-                const portfolio = {
-                    id: Date.now().toString(),
-                    title: parts[0].trim(),
-                    description: parts[1] ? parts[1].trim() : '',
-                    image: parts[2] ? parts[2].trim() : null,
-                    createdAt: new Date().toISOString()
-                };
-                
-                store.portfolios.push(portfolio);
-                
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *PORTOFOLIO BERHASIL DITAMBAHKAN!*\n\n🖼️ ${portfolio.title}\n📝 ${portfolio.description}\n🆔 \`${portfolio.id}\``,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Format salah!*\n\nGunakan format:\n\`/addportfolio Judul|Deskripsi|url_gambar\`\n\n*Contoh:*\n\`/addportfolio Website E-commerce|Website modern untuk toko online|https://example.com/project.jpg\``,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-            return res.status(200).json({ ok: true });
-        }
-
-        // Delete portfolio
-        if (text.startsWith('/delportfolio')) {
-            const id = text.replace('/delportfolio', '').trim();
-            const index = store.portfolios.findIndex(p => p.id === id);
-            
-            if (index !== -1) {
-                const deleted = store.portfolios.splice(index, 1)[0];
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *Portofolio berhasil dihapus!*\n\n🖼️ ${deleted.title}\n🆔 \`${deleted.id}\``,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.telegram.sendMessage(chatId, 
-                    `❌ *Portofolio tidak ditemukan!*\n\n🆔 \`${id}\`\n\nGunakan \`/listportfolio\` untuk melihat daftar.`,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-            return res.status(200).json({ ok: true });
-        }
-
-        // List portfolios
-        if (text === '/listportfolio') {
-            if (store.portfolios.length === 0) {
-                await bot.telegram.sendMessage(chatId, 
-                    `🖼️ *Belum ada portofolio*\n\nTambahkan portofolio dengan perintah:\n\`/addportfolio Judul|Deskripsi|url_gambar\``,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                let portfolioList = '*🖼️ DAFTAR PORTOFOLIO*\n\n';
-                store.portfolios.forEach((p, i) => {
-                    portfolioList += `${i+1}. *${p.title}*\n`;
-                    portfolioList += `   🆔 \`${p.id}\`\n`;
-                    portfolioList += `   📝 ${p.description.substring(0, 50)}${p.description.length > 50 ? '...' : ''}\n\n`;
-                });
-                portfolioList += `Gunakan \`/delportfolio [id]\` untuk menghapus portofolio.`;
-                
-                await bot.telegram.sendMessage(chatId, portfolioList, { parse_mode: 'Markdown' });
-            }
-            return res.status(200).json({ ok: true });
-        }
-
-        // Handle reply to customer (text)
-        if (text && text.match(/^reply_[a-zA-Z0-9_]+/)) {
-            const match = text.match(/^(reply_[a-zA-Z0-9_]+)\s+(.+)/s);
             if (match) {
                 const deviceId = match[1];
-                const replyMessage = match[2];
+                const textMessage = caption.replace(deviceId, '').trim();
+                
+                const fileId = body.message.photo[body.message.photo.length - 1].file_id;
+                const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+                const fileData = await fileRes.json();
+                const photoUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
                 
                 store.customerResponses[deviceId] = {
-                    text: replyMessage,
-                    image: null,
+                    text: textMessage || null,
+                    image: photoUrl,
                     timestamp: Date.now()
                 };
                 
-                await bot.telegram.sendMessage(chatId, 
-                    `✅ *Pesan terkirim ke customer!*\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 *Device ID:* \n\`${deviceId}\`\n\n📝 *Pesan:* \n> ${replyMessage.substring(0, 200)}${replyMessage.length > 200 ? '...' : ''}\n━━━━━━━━━━━━━━━━━━━━`,
-                    { parse_mode: 'Markdown' }
-                );
+                await sendMessage(botToken, chatId, `✅ Gambar dan pesan terkirim ke customer!\n\nDevice ID: ${deviceId}`);
             }
             return res.status(200).json({ ok: true });
         }
-    }
 
-    // ============================================
-    // HANDLE ADMIN SEND PHOTO + CAPTION
-    // ============================================
-    if (isAdmin && body.message.photo) {
-        const caption = body.message.caption || '';
-        const match = caption.match(/^(reply_[a-zA-Z0-9_]+)/);
-        
-        if (match) {
-            const deviceId = match[1];
-            const text = caption.replace(deviceId, '').trim();
-            
-            // Get file URL
-            const fileId = body.message.photo[body.message.photo.length - 1].file_id;
-            const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-            const fileData = await fileRes.json();
-            const filePath = fileData.result.file_path;
-            const photoUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-            
-            store.customerResponses[deviceId] = {
-                text: text || null,
-                image: photoUrl,
-                timestamp: Date.now()
-            };
-            
-            let responseText = `✅ *Gambar dan pesan terkirim ke customer!*\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 *Device ID:* \n\`${deviceId}\`\n`;
-            if (text) {
-                responseText += `\n📝 *Pesan:* \n> ${text}\n`;
-            }
-            responseText += `━━━━━━━━━━━━━━━━━━━━\n📷 *Gambar:* ${photoUrl.substring(0, 80)}...`;
-            
-            await bot.telegram.sendMessage(chatId, responseText, { parse_mode: 'Markdown' });
+        // ============================================
+        // CUSTOMER COMMANDS
+        // ============================================
+        if (!isAdmin && text === '/start') {
+            await sendMessage(botToken, chatId, 
+                `🛍️ Selamat datang di Xrans Official!\n\nKunjungi website kami:\nhttps://xrans-official.vercel.app\n\nUntuk order, silakan melalui website.`
+            );
             return res.status(200).json({ ok: true });
         }
-    }
 
-    // ============================================
-    // CUSTOMER COMMANDS
-    // ============================================
-    if (!isAdmin && text === '/start') {
-        await bot.telegram.sendMessage(chatId, 
-            `🛍️ *Selamat datang di Xrans Official!*\n\nTerima kasih telah menghubungi kami.\n\n🔗 Kunjungi website kami untuk melihat produk dan portofolio:\nhttps://xrans-official.vercel.app\n\n📦 Untuk order, silakan langsung melalui website.`,
-            { parse_mode: 'Markdown' }
-        );
+        // Default response untuk perintah tidak dikenal (admin only)
+        if (isAdmin && text && !text.startsWith('/')) {
+            await sendMessage(botToken, chatId, `❌ Perintah tidak dikenal.\n\nKetik /start untuk melihat daftar perintah.`);
+        }
+
         return res.status(200).json({ ok: true });
-    }
 
-    // Default response untuk perintah tidak dikenal (hanya untuk admin)
-    if (isAdmin && text && !text.startsWith('/')) {
-        await bot.telegram.sendMessage(chatId, 
-            `❌ *Perintah tidak dikenal*\n\nKetik \`/start\` untuk melihat daftar perintah yang tersedia.`,
-            { parse_mode: 'Markdown' }
-        );
+    } catch (error) {
+        console.error('Webhook error:', error);
+        return res.status(500).json({ 
+            error: 'Internal server error',
+            message: error.message 
+        });
     }
+}
 
-    return res.status(200).json({ ok: true });
+// Fungsi helper kirim pesan - TANPA Markdown!
+async function sendMessage(token, chatId, text) {
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: text
+                // TIDAK ADA parse_mode - pakai plain text
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            console.error('Telegram API error:', error);
+        }
+    } catch (err) {
+        console.error('Failed to send message:', err);
+    }
 }
