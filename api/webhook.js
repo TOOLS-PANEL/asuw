@@ -1,13 +1,3 @@
-// api/webhook.js - Bot Telegram dengan Database di Telegram
-
-import { 
-    addProduct, deleteProduct, getProducts,
-    addPortfolio, deletePortfolio, getPortfolios,
-    updateProfile, getProfile,
-    saveCustomerResponse, clearAllData,
-    manualBackup, forceRestore, getAllData
-} from './_db.js';
-
 export default async function handler(req, res) {
     if (req.method === 'GET') {
         return res.status(200).json({ status: 'active', message: 'Database di Telegram' });
@@ -34,56 +24,68 @@ export default async function handler(req, res) {
         const text = body.message.text;
         const isAdmin = chatId.toString() === adminId;
 
+        // ADMIN COMMANDS
         if (isAdmin) {
             
             if (text === '/start') {
-                const data = await getAllData();
-                await sendMessage(botToken, chatId, `
-XRANS OFFICIAL BOT
-━━━━━━━━━━━━━━━━━━━━
-📦 Produk: ${data.products.length}
-🖼️ Portofolio: ${data.portfolios.length}
-👤 Profile: ${data.profileName}
-
-💾 Database tersimpan di TELEGRAM (Permanen)
-
-📸 PROFILE
-/setprofile [url]
-/setname [nama]
-/settitle [title]
-
-📦 PRODUCT
-/addproduct Nama|Harga|Deskripsi|url
-/delproduct [id]
-/listproduct
-
-🖼️ PORTFOLIO
-/addportfolio Judul|Deskripsi|url
-/delportfolio [id]
-/listportfolio
-
-💾 BACKUP
-/backup - Backup manual
-/restore - Restore dari backup
-/clearall - Hapus semua data
-
-💬 RESPON
-reply_[deviceId] [pesan]
-`);
+                await sendMessage(botToken, chatId, 
+                    'XRANS OFFICIAL BOT\n\n' +
+                    '📦 Produk: ' + (await getProductCount()) + '\n' +
+                    '🖼️ Portofolio: ' + (await getPortfolioCount()) + '\n\n' +
+                    '📸 PROFILE\n/setprofile [url]\n/setname [nama]\n/settitle [title]\n\n' +
+                    '📦 PRODUCT\n/addproduct Nama|Harga|Deskripsi|url\n/delproduct [id]\n/listproduct\n\n' +
+                    '🖼️ PORTFOLIO\n/addportfolio Judul|Deskripsi|url\n/delportfolio [id]\n/listportfolio\n\n' +
+                    '💾 BACKUP\n/backup\n/restore\n/clearall\n\n' +
+                    '💬 RESPON\nreply_[deviceId] [pesan]'
+                );
                 return res.status(200).json({ ok: true });
             }
 
             if (text === '/backup') {
-                await sendMessage(botToken, chatId, `⏳ Backup database...`);
+                await sendMessage(botToken, chatId, 'Backup database...');
                 const success = await manualBackup();
-                await sendMessage(botToken, chatId, success ? `✅ Backup berhasil!` : `❌ Backup gagal!`);
+                await sendMessage(botToken, chatId, success ? 'Backup berhasil!' : 'Backup gagal!');
                 return res.status(200).json({ ok: true });
             }
 
             if (text === '/restore') {
-                await sendMessage(botToken, chatId, `⏳ Restore database...`);
+                await sendMessage(botToken, chatId, 'Restore database...');
                 const data = await forceRestore();
-                await sendMessage(botToken, chatId, `✅ Restore berhasil!\n📦 ${data.products.length} produk\n🖼️ ${data.portfolios.length} portofolio`);
+                await sendMessage(botToken, chatId, 'Restore berhasil! Produk: ' + (data.products?.length || 0));
+                return res.status(200).json({ ok: true });
+            }
+
+            if (text === '/clearall') {
+                await clearAllData();
+                await sendMessage(botToken, chatId, 'Semua data dihapus!');
+                return res.status(200).json({ ok: true });
+            }
+
+            if (text === '/listproduct') {
+                const products = await getProducts();
+                if (products.length === 0) {
+                    await sendMessage(botToken, chatId, 'Belum ada produk');
+                } else {
+                    let list = 'DAFTAR PRODUK\n';
+                    products.forEach((p, i) => {
+                        list += (i+1) + '. ' + p.name + '\n   Rp ' + p.price.toLocaleString() + '\n   ID: ' + p.id + '\n\n';
+                    });
+                    await sendMessage(botToken, chatId, list);
+                }
+                return res.status(200).json({ ok: true });
+            }
+
+            if (text === '/listportfolio') {
+                const portfolios = await getPortfolios();
+                if (portfolios.length === 0) {
+                    await sendMessage(botToken, chatId, 'Belum ada portofolio');
+                } else {
+                    let list = 'DAFTAR PORTOFOLIO\n';
+                    portfolios.forEach((p, i) => {
+                        list += (i+1) + '. ' + p.title + '\n   ID: ' + p.id + '\n\n';
+                    });
+                    await sendMessage(botToken, chatId, list);
+                }
                 return res.status(200).json({ ok: true });
             }
 
@@ -91,7 +93,7 @@ reply_[deviceId] [pesan]
                 const url = text.replace('/setprofile', '').trim();
                 if (url && url.startsWith('http')) {
                     await updateProfile({ profileImage: url });
-                    await sendMessage(botToken, chatId, `✅ Foto profil diupdate!\n\`${url}\``);
+                    await sendMessage(botToken, chatId, 'Foto profil diupdate: ' + url);
                 }
                 return res.status(200).json({ ok: true });
             }
@@ -100,7 +102,7 @@ reply_[deviceId] [pesan]
                 const name = text.replace('/setname', '').trim();
                 if (name) {
                     await updateProfile({ profileName: name });
-                    await sendMessage(botToken, chatId, `✅ Nama: \`${name}\``);
+                    await sendMessage(botToken, chatId, 'Nama: ' + name);
                 }
                 return res.status(200).json({ ok: true });
             }
@@ -109,7 +111,7 @@ reply_[deviceId] [pesan]
                 const title = text.replace('/settitle', '').trim();
                 if (title) {
                     await updateProfile({ profileTitle: title });
-                    await sendMessage(botToken, chatId, `✅ Jabatan: \`${title}\``);
+                    await sendMessage(botToken, chatId, 'Jabatan: ' + title);
                 }
                 return res.status(200).json({ ok: true });
             }
@@ -125,9 +127,9 @@ reply_[deviceId] [pesan]
                         image: parts[3] ? parts[3].trim() : null
                     };
                     await addProduct(product);
-                    await sendMessage(botToken, chatId, `✅ Produk: ${product.name}\n💰 Rp ${product.price.toLocaleString()}\n🆔 \`${product.id}\``);
+                    await sendMessage(botToken, chatId, 'Produk ditambahkan: ' + product.name + '\nID: ' + product.id);
                 } else {
-                    await sendMessage(botToken, chatId, `❌ Format: /addproduct Nama|Harga|Deskripsi|url`);
+                    await sendMessage(botToken, chatId, 'Format salah! /addproduct Nama|Harga|Deskripsi|url');
                 }
                 return res.status(200).json({ ok: true });
             }
@@ -135,21 +137,7 @@ reply_[deviceId] [pesan]
             if (text.startsWith('/delproduct')) {
                 const id = text.replace('/delproduct', '').trim();
                 await deleteProduct(id);
-                await sendMessage(botToken, chatId, `✅ Hapus produk ID: \`${id}\``);
-                return res.status(200).json({ ok: true });
-            }
-
-            if (text === '/listproduct') {
-                const products = await getProducts();
-                if (products.length === 0) {
-                    await sendMessage(botToken, chatId, `📦 Belum ada produk`);
-                } else {
-                    let list = '📦 DAFTAR PRODUK\n━━━━━━━━━━━━━━\n';
-                    products.forEach((p, i) => {
-                        list += `${i+1}. ${p.name}\n   💰 Rp ${p.price.toLocaleString()}\n   🆔 \`${p.id}\`\n\n`;
-                    });
-                    await sendMessage(botToken, chatId, list);
-                }
+                await sendMessage(botToken, chatId, 'Hapus produk ID: ' + id);
                 return res.status(200).json({ ok: true });
             }
 
@@ -163,9 +151,9 @@ reply_[deviceId] [pesan]
                         image: parts[2] ? parts[2].trim() : null
                     };
                     await addPortfolio(portfolio);
-                    await sendMessage(botToken, chatId, `✅ Portofolio: ${portfolio.title}\n🆔 \`${portfolio.id}\``);
+                    await sendMessage(botToken, chatId, 'Portofolio ditambahkan: ' + portfolio.title + '\nID: ' + portfolio.id);
                 } else {
-                    await sendMessage(botToken, chatId, `❌ Format: /addportfolio Judul|Deskripsi|url`);
+                    await sendMessage(botToken, chatId, 'Format salah! /addportfolio Judul|Deskripsi|url');
                 }
                 return res.status(200).json({ ok: true });
             }
@@ -173,27 +161,7 @@ reply_[deviceId] [pesan]
             if (text.startsWith('/delportfolio')) {
                 const id = text.replace('/delportfolio', '').trim();
                 await deletePortfolio(id);
-                await sendMessage(botToken, chatId, `✅ Hapus portofolio ID: \`${id}\``);
-                return res.status(200).json({ ok: true });
-            }
-
-            if (text === '/listportfolio') {
-                const portfolios = await getPortfolios();
-                if (portfolios.length === 0) {
-                    await sendMessage(botToken, chatId, `🖼️ Belum ada portofolio`);
-                } else {
-                    let list = '🖼️ DAFTAR PORTOFOLIO\n━━━━━━━━━━━━━━\n';
-                    portfolios.forEach((p, i) => {
-                        list += `${i+1}. ${p.title}\n   🆔 \`${p.id}\`\n\n`;
-                    });
-                    await sendMessage(botToken, chatId, list);
-                }
-                return res.status(200).json({ ok: true });
-            }
-
-            if (text === '/clearall') {
-                await clearAllData();
-                await sendMessage(botToken, chatId, `✅ Semua data dihapus!`);
+                await sendMessage(botToken, chatId, 'Hapus portofolio ID: ' + id);
                 return res.status(200).json({ ok: true });
             }
 
@@ -203,7 +171,7 @@ reply_[deviceId] [pesan]
                     const deviceId = match[1];
                     const replyMessage = match[2];
                     await saveCustomerResponse(deviceId, { text: replyMessage, image: null, timestamp: Date.now() });
-                    await sendMessage(botToken, chatId, `✅ Pesan ke \`${deviceId}\`: ${replyMessage.substring(0, 100)}`);
+                    await sendMessage(botToken, chatId, 'Pesan ke ' + deviceId + ': ' + replyMessage.substring(0, 100));
                 }
                 return res.status(200).json({ ok: true });
             }
@@ -220,13 +188,13 @@ reply_[deviceId] [pesan]
                 const fileData = await fileRes.json();
                 const photoUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
                 await saveCustomerResponse(deviceId, { text: textMessage || null, image: photoUrl, timestamp: Date.now() });
-                await sendMessage(botToken, chatId, `✅ Gambar ke \`${deviceId}\``);
+                await sendMessage(botToken, chatId, 'Gambar ke ' + deviceId);
             }
             return res.status(200).json({ ok: true });
         }
 
         if (!isAdmin && text === '/start') {
-            await sendMessage(botToken, chatId, `🛍️ Xrans Official\n🔗 https://xrans-official.vercel.app`);
+            await sendMessage(botToken, chatId, 'Xrans Official\nhttps://xrans-official.vercel.app');
             return res.status(200).json({ ok: true });
         }
 
@@ -238,12 +206,31 @@ reply_[deviceId] [pesan]
     }
 }
 
+// Helper functions (import dari _db.js)
+import { 
+    addProduct, deleteProduct, getProducts,
+    addPortfolio, deletePortfolio, getPortfolios,
+    updateProfile, getProfile,
+    saveCustomerResponse, clearAllData,
+    manualBackup, forceRestore, getAllData
+} from './_db.js';
+
+async function getProductCount() {
+    const p = await getProducts();
+    return p.length;
+}
+
+async function getPortfolioCount() {
+    const p = await getPortfolios();
+    return p.length;
+}
+
 async function sendMessage(token, chatId, text) {
     try {
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
+            body: JSON.stringify({ chat_id: chatId, text })
         });
     } catch (err) {}
 }
