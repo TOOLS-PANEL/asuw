@@ -1,7 +1,10 @@
-// api/_db.js - Database via Telegram (tanpa file lokal)
+// api/_db.js - Database dengan file cache + backup ke Telegram
+
+import fs from 'fs';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_ID = process.env.TELEGRAM_CHAT_ID;
+const DATA_PATH = '/tmp/store.json';
 
 let DATABASE_MESSAGE_ID = null;
 
@@ -14,28 +17,56 @@ const defaultData = {
     customerResponses: {}
 };
 
+// ============================================
+// BACA DATA - PRIORITAS DARI FILE (CACHE)
+// ============================================
 export async function readData() {
     try {
-        const messages = await getLastDatabaseMessage();
-        if (messages && messages.text) {
-            const data = JSON.parse(messages.text);
-            return { ...defaultData, ...data };
+        // Coba baca dari file cache dulu (cepat)
+        if (fs.existsSync(DATA_PATH)) {
+            const data = fs.readFileSync(DATA_PATH, 'utf8');
+            const parsed = JSON.parse(data);
+            console.log('Data loaded from file cache');
+            return { ...defaultData, ...parsed };
         }
     } catch (e) {}
+    
+    // Jika file tidak ada, ambil dari Telegram
+    console.log('File cache not found, loading from Telegram...');
+    const telegramData = await loadFromTelegram();
+    if (telegramData) {
+        // Simpan ke file cache
+        fs.writeFileSync(DATA_PATH, JSON.stringify(telegramData, null, 2));
+        return { ...defaultData, ...telegramData };
+    }
+    
     return { ...defaultData };
 }
 
+// ============================================
+// TULIS DATA - SIMPAN KE FILE + BACKUP KE TELEGRAM
+// ============================================
 export async function writeData(data) {
     try {
+        // 1. Simpan ke file cache (real-time)
+        fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
+        console.log('Data saved to file cache');
+        
+        // 2. Backup ke Telegram (async, tidak ngeblock)
         const { customerResponses, ...backupData } = data;
-        const jsonString = JSON.stringify(backupData, null, 2);
-        return await sendDatabaseMessage(jsonString);
+        backupToTelegram(backupData);
+        
+        return true;
     } catch (e) {
+        console.error('Error writing data:', e);
         return false;
     }
 }
 
-async function getLastDatabaseMessage() {
+// ============================================
+// LOAD DATABASE DARI TELEGRAM
+// ============================================
+async function loadFromTelegram() {
     try {
         const response = await fetch(
             `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates`,
@@ -46,6 +77,7 @@ async function getLastDatabaseMessage() {
             }
         );
         const result = await response.json();
+        
         if (!result.ok || !result.result) return null;
         
         const messages = result.result.reverse();
@@ -58,7 +90,8 @@ async function getLastDatabaseMessage() {
                 const parsed = JSON.parse(text);
                 if (parsed.hasOwnProperty('products') && parsed.hasOwnProperty('portfolios')) {
                     DATABASE_MESSAGE_ID = msg.message_id;
-                    return { text, message_id: msg.message_id };
+                    console.log('Database loaded from Telegram');
+                    return parsed;
                 }
             } catch (e) {}
         }
@@ -68,58 +101,62 @@ async function getLastDatabaseMessage() {
     }
 }
 
-async function sendDatabaseMessage(jsonString) {
+// ============================================
+// BACKUP KE TELEGRAM (TIDAK NGEMBAT)
+// ============================================
+async function backupToTelegram(data) {
     try {
-        if (DATABASE_MESSAGE_ID) {
-            const response = await fetch(
-                `https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: ADMIN_ID,
-                        message_id: DATABASE_MESSAGE_ID,
-                        text: jsonString
-                    })
-                }
-            );
-            const result = await response.json();
-            if (result.ok) return true;
-        }
+        const jsonString = JSON.stringify(data, null, 2);
         
-        const response = await fetch(
-            `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-            {
+        if (DATABASE_MESSAGE_ID) {
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     chat_id: ADMIN_ID,
+                    message_id: DATABASE_MESSAGE_ID,
                     text: jsonString
                 })
+            });
+        } else {
+            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: ADMIN_ID, text: jsonString })
+            });
+            const result = await response.json();
+            if (result.ok) {
+                DATABASE_MESSAGE_ID = result.result.message_id;
             }
-        );
-        const result = await response.json();
-        if (result.ok) {
-            DATABASE_MESSAGE_ID = result.result.message_id;
-            return true;
         }
-        return false;
+        console.log('Backup to Telegram completed');
     } catch (e) {
-        return false;
+        console.error('Backup failed:', e);
     }
 }
 
+// ============================================
+// FORCE RESTORE DARI TELEGRAM
+// ============================================
 export async function forceRestore() {
-    const data = await readData();
-    await writeData(data);
-    return data;
+    const data = await loadFromTelegram();
+    if (data) {
+        await writeData(data);
+        return data;
+    }
+    return null;
 }
 
 export async function manualBackup() {
     const data = await readData();
-    return await writeData(data);
+    const { customerResponses, ...backupData } = data;
+    await backupToTelegram(backupData);
+    return true;
 }
 
+// ============================================
+// FUNGSI CRUD (SAMA SEPERTI SEBELUMNYA)
+// ============================================
 export async function getProducts() {
     const data = await readData();
     return data.products;
